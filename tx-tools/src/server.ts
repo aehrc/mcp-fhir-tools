@@ -50,10 +50,12 @@ server.tool(
     - "http://loinc.org/vs" (all of LOINC)
     - "http://snomed.info/sct?fhir_vs=isa/71388002" (SNOMED CT procedures, i.e. all codes that are a 
       subtype of Procedure (71388002))`),
+    txServer: z.string().optional().describe(`Optional URL of the terminology server to use for validation. If not provided, 
+    will use environment variable or https://tx.ontoserver.csiro.au/fhir`),
   },
-  async ({ filter, url }) => {
+  async ({ filter, url, txServer }) => {
     const serverBase =
-      process.env.TX_SERVER ?? "https://tx.ontoserver.csiro.au/fhir";
+      txServer ?? process.env.TX_SERVER ?? "https://tx.ontoserver.csiro.au/fhir";
 
     const expandUrl = new URL(`${serverBase}/ValueSet/$expand`);
     expandUrl.searchParams.set("url", url);
