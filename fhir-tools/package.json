@@ -1,6 +1,6 @@
 {
   "name": "mcp-fhir-tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Tools for adding FHIR capabilities to LLMs.",
   "type": "module",
   "bin": {

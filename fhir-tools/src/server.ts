@@ -152,9 +152,15 @@ server.tool(
         };
       }
 
+      const stripAnsiCodes = (text: string) => {
+        // eslint-disable-next-line no-control-regex
+        return text.replace(/\x1b\[[0-9;]*m/g, '');
+      }
+
       // Filter output to only include Information, Warning, and Error lines
       const filteredLines = output
         .split("\n")
+        .map(stripAnsiCodes)
         .map((line) => line.trimStart())
         .filter(
           (line) => line.startsWith("Warning") || line.startsWith("Error"),
