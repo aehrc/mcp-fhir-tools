@@ -154,8 +154,8 @@ server.tool(
 
       const stripAnsiCodes = (text: string) => {
         // eslint-disable-next-line no-control-regex
-        return text.replace(/\x1b\[[0-9;]*m/g, '');
-      }
+        return text.replace(/\x1b\[[0-9;]*m/g, "");
+      };
 
       // Filter output to only include Information, Warning, and Error lines
       const filteredLines = output
