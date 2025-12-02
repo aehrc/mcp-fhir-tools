@@ -18,6 +18,9 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import server from "./server.js";
 
+const appPort = process.env.PORT ?? 3003
+const basePath = process.env.BASE_PATH ?? "";
+
 const logger = console;
 const app = express();
 
@@ -25,7 +28,7 @@ let transport: SSEServerTransport;
 
 app.get("/sse", async (_req: express.Request, res: express.Response) => {
   logger.info("Received SSE connection request");
-  transport = new SSEServerTransport("/messages", res);
+  transport = new SSEServerTransport(`${basePath}/messages`, res);
   await server.connect(transport);
   logger.info("SSE transport connected");
 });
@@ -35,6 +38,7 @@ app.post("/messages", async (req: express.Request, res: express.Response) => {
   await transport.handlePostMessage(req, res);
 });
 
-app.listen(3003, () =>
-  logger.info("Generic FHIR Tools server listening on port 3003"),
+
+app.listen(appPort, () =>
+  logger.info(`Generic FHIR Tools server listening on port ${appPort}`),
 );
