@@ -1,0 +1,4 @@
+au/csiro/mcp/fhirtools/validator/PackageProfileSourceTest.class
+au/csiro/mcp/fhirtools/validator/ValidateCliIntegrationTest.class
+au/csiro/mcp/fhirtools/validator/CliArgsTest.class
+au/csiro/mcp/fhirtools/validator/IssueJsonTest.class

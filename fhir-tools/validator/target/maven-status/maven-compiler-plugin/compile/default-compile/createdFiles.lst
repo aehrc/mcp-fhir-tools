@@ -1,0 +1,6 @@
+au/csiro/mcp/fhirtools/validator/PackageProfileSource$Entry.class
+au/csiro/mcp/fhirtools/validator/IssueJson.class
+au/csiro/mcp/fhirtools/validator/ValidateCli.class
+au/csiro/mcp/fhirtools/validator/CliArgs.class
+au/csiro/mcp/fhirtools/validator/PackageProfileSource.class
+au/csiro/mcp/fhirtools/validator/FhirRelease.class
