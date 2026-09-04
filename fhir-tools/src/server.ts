@@ -12,6 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Author: John Grimes
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -19,7 +21,6 @@ import { execFile } from "child_process";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { z } from "zod";
 
 /**
@@ -41,146 +42,135 @@ const server = new McpServer({
 // Register FHIR validation tool
 server.tool(
   "validate",
-  `Validate a FHIR resource using the official FHIR validator. If the resource contains coded 
+  `Validate a FHIR resource using the validodo validation library. If the resource contains coded 
   fields, use the lookup-code tool to make sure that valid codes are populated before attempting 
   validation.`,
   {
     resource: z.string().describe(`FHIR resource in JSON format`),
-    fhirVersion: z.enum([
-      "4.0.1",
-      "1.0.2",
-      "1.4.0",
-      "3.0.2",
-      "4.1.0",
-      "4.3.0",
-      "6.0.0",
-    ]).describe(`The version of FHIR to validate against. Supported values are:
-        - "4.0.1" R4 (use this if version not specified)
-        - "1.0.2": DSTU2
-        - "1.4.0": STU3 Ballot 3 (Montreal), sometimes known as DSTU 2.1
-        - "3.0.2": STU3, also known as R3
-        - "4.1.0": R4B Ballot 1
-        - "4.3.0": R4B
-        - "6.0.0": R6 (current development build)`),
-    snomedVersion: z
-      .enum(["intl", "us", "uk", "au", "nl", "ca", "se", "dk", "es"])
-      .describe(
-        `SNOMED CT version to use for validation. Defaults to international version if not 
-        specified. National implementation guides will generally need the SNOMED edition for their 
-        country. Supported values are:
-        - "intl": International
-        - "us": United States
-        - "uk": United Kingdom
-        - "au": Australia
-        - "nl": Netherlands
-        - "ca": Canada
-        - "se": Sweden
-        - "dk": Denmark
-        - "es": Spain`,
-      ),
+    fhirVersion: z.enum(["4.0.1", "5.0.0"])
+      .describe(`The version of FHIR to validate against:
+        - "4.0.1": R4 (use this if version not specified)
+        - "5.0.0": R5`),
     txServer: z
       .string()
       .url()
       .optional()
       .describe(
         `Optional URL of the terminology server to use for validation. If not provided, 
-        the validator's default (tx.fhir.org) will be used. For Australian FHIR content, use 
-        "https://tx.dev.hl7.org.au/fhir".`,
+        "https://tx.fhir.org/r4" (R4) or "https://tx.fhir.org/r5" (R5) will be used. For 
+        Australian FHIR content, use "https://tx.hl7.org.au/fhir".`,
+      ),
+    packages: z
+      .array(z.string())
+      .optional()
+      .describe(
+        `Optional FHIR packages to load profiles from, each in the form "id#version" (e.g. 
+        "hl7.fhir.au.core#2.0.0"). Declare the implementation guide(s) the resource claims 
+        conformance to; their dependencies are loaded automatically. The core definitions for 
+        the chosen FHIR version are always loaded.`,
+      ),
+    profiles: z
+      .array(z.string())
+      .optional()
+      .describe(
+        `Optional profile canonical URLs to validate against, in addition to any profiles 
+        declared in the resource's meta.profile.`,
       ),
   },
-  async ({ resource, fhirVersion, snomedVersion, txServer }) => {
+  async ({ resource, fhirVersion, txServer, packages, profiles }) => {
+    // Create a temporary file to store the resource
+    const tempFile = `/tmp/resource-${crypto.randomUUID()}.json`;
     try {
-      // Create a temporary file to store the resource
-      const tempFile = `/tmp/resource-${crypto.randomUUID()}.json`;
       await fs.promises.writeFile(tempFile, resource);
 
-      // Determine the path to the validator JAR
-      // The JAR is expected to be in fhir-tools/bin/validator_cli.jar
-      // This script (server.ts) is in fhir-tools/src/server.ts
-      // After compilation, it might be in fhir-tools/dist/server.js (or similar)
-      // or run directly by bun from fhir-tools/src/server.ts
-      const scriptFileUrl = import.meta.url;
-      const scriptFilePath = fileURLToPath(scriptFileUrl);
-      const scriptFileDir = path.dirname(scriptFilePath);
-      // The JAR is in '../bin/' relative to 'fhir-tools/src/' or 'fhir-tools/dist/'
-      const validatorJarPath = path.join(
-        scriptFileDir,
-        "../bin/validator_cli.jar",
-      );
+      // Determine the path to the validodo launcher JAR, which lives in fhir-tools/bin/
+      // (a sibling of the src/ and dist/ directories). VALIDODO_CLI_JAR overrides it.
+      const jarPath =
+        process.env.VALIDODO_CLI_JAR ??
+        path.join(
+          path.dirname(path.resolve(process.argv[1] ?? ".")),
+          "../bin/validodo-cli.jar",
+        );
 
       // Construct the validation command arguments for execFile
-      // The source file (tempFile) should come directly after the JAR path.
-      const commandArgs = ["-jar", validatorJarPath, tempFile];
-
-      // Conditionally add the terminology server argument
+      const commandArgs = ["-jar", jarPath, "--fhir-version", fhirVersion];
       if (txServer) {
-        commandArgs.push("-tx", txServer);
+        commandArgs.push("--tx", txServer);
+      }
+      for (const pkg of packages ?? []) {
+        commandArgs.push("--package", pkg);
+      }
+      for (const profile of profiles ?? []) {
+        commandArgs.push("--profile", profile);
+      }
+      commandArgs.push(tempFile);
+
+      // Execute the command. The launcher exits 0 whenever validation ran, so a non-zero
+      // exit code means the process itself failed.
+      const { stdout } = await new Promise<{ stdout: string }>(
+        (resolve, reject) => {
+          execFile("java", commandArgs, (error, stdout, stderr) => {
+            if (error) {
+              const message = stderr || error.message;
+              reject(
+                new Error(
+                  message +
+                    (message.includes("validodo-cli.jar")
+                      ? ` (build the launcher JAR with \`npm run build-validator\`)`
+                      : ""),
+                ),
+              );
+            } else {
+              resolve({ stdout });
+            }
+          });
+        },
+      );
+
+      // Process the output: one issue per line in a JSON array
+      let issues: Array<{
+        severity: string;
+        code: string;
+        expression: string[];
+        diagnostics: string;
+      }>;
+      try {
+        issues = JSON.parse(stdout);
+      } catch (error) {
+        throw new Error(
+          `Unexpected output from validator: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
 
-      // Add other validation options
-      commandArgs.push("-sct", snomedVersion, "-version", fhirVersion);
-
-      // Execute the command
-      const { stdout, stderr } = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        execFile("java", commandArgs, (error, stdout, stderr) => {
-          if (error && error.code !== 1) {
-            // Note: validator may return 1 for validation errors
-            reject(error);
-          } else {
-            resolve({ stdout, stderr });
-          }
-        });
-      });
-
-      // Clean up temp file
-      await fs.promises.unlink(tempFile);
-
-      // Process the output
-      const output = stdout || stderr;
-      if (!output) {
+      if (issues.length === 0) {
         return {
           content: [
             {
               type: "text",
-              text: "Validation failed: No output from validator",
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const stripAnsiCodes = (text: string) => {
-        // eslint-disable-next-line no-control-regex
-        return text.replace(/\x1b\[[0-9;]*m/g, "");
-      };
-
-      // Filter output to only include Information, Warning, and Error lines
-      const filteredLines = output
-        .split("\n")
-        .map(stripAnsiCodes)
-        .map((line) => line.trimStart())
-        .filter(
-          (line) => line.startsWith("Warning") || line.startsWith("Error"),
-        )
-        .join("\n");
-
-      if (!filteredLines) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Validation completed with no warnings or errors",
+              text: "Validation completed with no issues",
             },
           ],
           isError: false,
         };
       }
 
+      const renderedIssues = issues
+        .map((issue) => {
+          const location =
+            issue.expression.length > 0
+              ? ` at ${issue.expression.join(", ")}`
+              : "";
+          return `[${issue.severity}] ${issue.diagnostics} (${issue.code}${location})`;
+        })
+        .join("\n");
+
       return {
-        content: [{ type: "text", text: filteredLines }],
+        content: [
+          {
+            type: "text",
+            text: `Validation completed with ${issues.length} issue${issues.length === 1 ? "" : "s"}:\n${renderedIssues}`,
+          },
+        ],
         isError: false,
       };
     } catch (error) {
@@ -189,6 +179,9 @@ server.tool(
         content: [{ type: "text", text: result }],
         isError: true,
       };
+    } finally {
+      // Clean up the temp file whether validation succeeded or failed
+      await fs.promises.unlink(tempFile).catch(() => undefined);
     }
   },
 );

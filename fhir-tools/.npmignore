@@ -1,20 +1,21 @@
 # Source files
 src/
 tests/
+validator/
 *.ts
 !*.d.ts
 
 # Configuration files
 tsconfig.json
 jest.config.js
-.eslintrc.js
+.eslintrc.json
 .prettierrc
 
-# Make sure validator_cli.jar is not included in the package
-bin/validator_cli.jar
-bin/download-validator.ts
+# The validator launcher JAR is built with `npm run build-validator`, not shipped
+bin/validodo-cli.jar
 
 # Build artifacts
+dist/
 coverage/
 .nyc_output/
 

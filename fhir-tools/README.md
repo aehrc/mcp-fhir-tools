@@ -5,15 +5,33 @@ generation.
 
 ## Features
 
-### FHIR Resource Validation
+### FHIR resource validation
 
-Validates FHIR resources against the official FHIR validator, supporting
-multiple FHIR versions and SNOMED CT editions.
+Validates FHIR resources using [validodo](https://github.com/aehrc/validodo), a
+fast standalone FHIR validation library, with terminology checks delegated to a
+FHIR terminology server.
 
-### UUID Generation
+### UUID generation
 
 Generates random UUID v4 strings for use as unique identifiers in FHIR
 resources.
+
+## Building the validator launcher
+
+The `validate` tool invokes a small Java launcher, built against the validodo
+library. Build it with:
+
+```bash
+npm run build-validator
+```
+
+This requires Java 21 and Maven, plus a local build of validodo in your Maven
+repository (clone [aehrc/validodo](https://github.com/aehrc/validodo) and run
+`mvn install -DskipTests`). The launcher JAR is written to
+`fhir-tools/bin/validodo-cli.jar`.
+
+Until validodo is published to a public Maven repository, the launcher cannot be
+built by plain `npx` consumers; build it from a checkout as above.
 
 ## Installation
 
@@ -86,17 +104,22 @@ This starts a server on port 3003 that can be accessed via Server-Sent Events
 
 #### validate
 
-Validates a FHIR resource using the official FHIR validator.
+Validates a FHIR resource using validodo. Profiles declared in the resource's
+`meta.profile` are always applied.
 
 Parameters:
 
 - `resource`: FHIR resource in JSON format
-- `fhirVersion`: The version of FHIR to validate against (4.0.1, 1.0.2, etc.)
-- `snomedVersion`: SNOMED CT version to use for validation (intl, us, uk, au,
-  etc.)
-- `txServer` (optional): URL of the terminology server to use. If not provided,
-  the validator's default (often `tx.fhir.org`) is used. For Australian FHIR
-  content, use `https://tx.dev.hl7.org.au/fhir`.
+- `fhirVersion`: The version of FHIR to validate against (`4.0.1` or `5.0.0`)
+- `txServer` (optional): URL of the terminology server to use. Defaults to
+  `https://tx.fhir.org/r4` (R4) or `https://tx.fhir.org/r5` (R5). For Australian
+  FHIR content, use `https://tx.hl7.org.au/fhir`.
+- `packages` (optional): FHIR packages to load profiles from, each as
+  `id#version` (e.g. `hl7.fhir.au.core#2.0.0`). Declare the implementation
+  guide(s) the resource claims conformance to; dependencies are loaded
+  automatically.
+- `profiles` (optional): profile canonical URLs to validate against, in addition
+  to `meta.profile`.
 
 #### generate-uuid
 

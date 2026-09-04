@@ -17,8 +17,7 @@
     "lint:fix": "npx eslint . --ext .ts,.js --fix",
     "format": "npx prettier --write \"**/*.{ts,js,json,md}\"",
     "format:check": "npx prettier -l \"**/*.{ts,js,json,md}\"",
-    "download-validator": "node bin/download-validator.js",
-    "postinstall": "node bin/download-validator.js",
+    "build-validator": "mvn -q -f validator/pom.xml package -DskipTests",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -56,7 +55,6 @@
     "typescript": "^5.2.2"
   },
   "files": [
-    "dist",
-    "bin/download-validator.js"
+    "dist"
   ]
 }
